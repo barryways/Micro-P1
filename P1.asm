@@ -26,7 +26,7 @@
 .data
 	; Mensajes
     titulomenuprincipal DB 10,13, 'Bienvenido al menu principal, el numero 1 es para la parte 1 y el numero 2 para la parte 2$', 0
-    titulomenuparte1 DB 10,13, 'Bienvenido al menu de la parte 1$', 0
+    titulomenuparte1 DB 10,13, 'Bienvenido al menu de la parte el numero 1 es para la generar un UUID y el numero 2 para regresar$', 0
     titulomenuparte2 DB 10,13, 'Bienvenido al menu de la parte 2$', 0
     ; Mensaje de error
     msgError DB 10,13, 'Opcion invalida, intente de nuevo$', 0
@@ -34,25 +34,20 @@
 
 	;Variables menu parte 1
     msgGenerarUUID DB 10,13, 'Generando UUID...$', 0
-    UUIDbuffer DB 16 DUP(?) ; Buffer para guardar el UUID (16 bytes)
-	msg DB 10,13,'Este-----$', 0
+	msg DB 10,13,'Generando UUID $', 0
+	guion DB '-$', 0
+	byteSignificativo1 DB '1$', 0
+	byteSignificativo2 DB '-$', 0
 	
-	var1 DB '653E4B57', 0
-    var2 DB '0058', 0
-    var3 DB '45C7', 0
-    var4 DB '886F', 0
-    var5 DB '76065208B0AB', 0
-    resultado DB 50 dup(0) ; Buffer para el resultado, ajusta el tamaño según sea necesario
-    separador DB '-', 0    ; Separador
-	
-	
-	;variables menu parte 2
-	
+    aleatorio DB ?                     ; Variable para almacenar el carácter aleatorio
 
-	;variables extras 
+	;variables menu parte 2S
+
+
+	;variables extras
 	newline db 0Dh, 0Ah, '$'  ; Cadena que contiene retorno de carro y nueva línea
-	
-	
+
+
 .stack 100h
 .code
 .startup
@@ -98,50 +93,20 @@ Parte1:
     MOV ah, 09h
     LEA dx, titulomenuparte1
     INT 21h
+	call SaltoDeLinea ;insertamos un salto de linea para que se vea bonito
+    call LeerOpcion	; Leemos lo que pone el user
 	
-	;mov cx, 32          ; Contador para 32 repeticiones
-	;repeat_procedure:
-    ;call MiProcedimiento ; Llamar al procedimiento
-    ;loop repeat_procedure ; Decrementar CX y repetir si no es cero
 
-; Concatenar var1, var2, var3, var4 y var5 en resultado
-    lea si, var1           ; Cargar dirección de var1
-    call Concatenar        ; Concatenar var1
+    ; Comparar la entrada
+    CMP AL, '1'  ; Comparamos si el resultado del teclado es 1
+    JE llamar_todos_aleatorios    ; Ir a la parte 1
 
-    lea si, separador      ; Cargar dirección del separador
-    call Concatenar        ; Concatenar el separador
+    CMP AL, '2'  ; Comparamos si es 2
+    JE MenuPrincipal    ; Nos saltamos a la parte de la validacion del UUID
 
-    lea si, var2           ; Cargar dirección de var2
-    call Concatenar        ; Concatenar var2
-
-    lea si, separador      ; Cargar dirección del separador
-    call Concatenar        ; Concatenar el separador
-
-    lea si, var3           ; Cargar dirección de var3
-    call Concatenar        ; Concatenar var3
-
-    lea si, separador      ; Cargar dirección del separador
-    call Concatenar        ; Concatenar el separador
-
-    lea si, var4           ; Cargar dirección de var4
-    call Concatenar        ; Concatenar var4
-
-    lea si, separador      ; Cargar dirección del separador
-    call Concatenar        ; Concatenar el separador
-
-    lea si, var5           ; Cargar dirección de var5
-    call Concatenar        ; Concatenar var5
-
-    ; Imprimir el resultado
-    mov dx, offset resultado
-    mov ah, 09h
-    int 21h
-
-    ; Finalizar el programa
-    mov ax, 4C00h
-    int 21h
-
-    jmp MenuPrincipal ; Terminamos y volvemos
+    ; Si no es valido, mostrar mensaje de error y repetir
+    call MostrarError
+    JMP MenuPrincipal
 
 ; ---------------------------------------
 ; Procedimiento para la parte 2
@@ -188,74 +153,268 @@ SaltoDeLinea:
 ;PARTE 1
 ; ---------------------------------------
 ; ---------------------------------------
-; Procedimiento para generar UUID
+; Procedimiento para numeros random
 ; ---------------------------------------
-GenerarUUID:
-    ; Mostrar mensaje de inicio
-    mov ah, 09h
-    lea dx, msgGenerarUUID
-    int 21h
+generate_random proc
 
-    ; Generar 16 bytes aleatorios para el UUID
-    mov cx, 16       ; Vamos a generar 16 bytes para el UUID
-    lea si, UUIDbuffer   ; Cargar la dirección base del buffer en SI
+mov bx, 1        ; BX se usará para controlar el número de iteraciones
+generate:
+   MOV AH, 00h       ; Interrupción para obtener el tiempo del sistema        
+   INT 1AH           ; CX:DX ahora contienen los ticks del reloj desde medianoche      
 
-; Procedimiento que se llama 32 veces
-MiProcedimiento proc
-    ; Aquí va la lógica del procedimiento
-    mov dx, offset msg  ; Cargar la dirección del mensaje
-    mov ah, 09h         ; Función de impresión de cadena
-    int 21h             ; Llamar a la interrupción de DOS
+   mov  ax, dx       ; Copiamos el valor de DX a AX
+   xor  dx, dx       ; Limpiamos DX
+   mov  cx, 16       ; Queremos un número del 0 al 15 (hexadecimal)   
+   div  cx           ; Aquí DX contendrá el residuo de la división (un número entre 0 y 15)
+
+   cmp  dl, 9        ; Comparamos si el número es mayor que 9
+   jbe  is_digit     ; Si es menor o igual a 9, es un dígito decimal ('0' a '9')
+
+   ; Convertimos a 'A' a 'F' para los valores 10 a 15
+   add  dl, 7        ; Ajustamos para que 10 sea 'A', 11 sea 'B', ..., 15 sea 'F'
+
+is_digit:
+   add  dl, '0'      ; Convertimos a su valor ASCII ('0' a '9' o 'A' a 'F')
+   mov  ah, 2h       ; Llamamos a la interrupción para mostrar el valor en DL
+   int 21h   
+
+   dec bx            ; Decrementamos BX (controla el loop)
+   cmp bx, 0         ; Comprobamos si BX es 0
+   jne generate      ; Si no es 0, volvemos al inicio del loop
+
+generate_random endp
+
+
+
+
+;-----------------------------------------
+;Procedimiento para generar un retraso en el programa
+;-----------------------------------------
+
+long_delay proc
+    mov cx, 0FFFFh    ; Un retardo más largo
+    mov dx, 0FFFFh    ; Segundo registro para mayor retardo
+delay_loop:
+    loop delay_loop   ; Bucle de retardo
+    dec dx            ; Decrementamos DX
+    jnz delay_loop    ; Continuamos hasta que DX llegue a 0
     ret
-MiProcedimiento endp
+long_delay endp
 
-; ---------------------------------------
-; Generar un número aleatorio usando timestamp
-; ---------------------------------------
-GenerarNumeroAleatorio:
-    ; Usamos la interrupción 1Ah para obtener el reloj del sistema (timestamp)
-    mov ah, 00h
-    int 1Ah            ; Retorna el valor en CX:DX (timestamp)
-    
-    ; XOR de DX y CX para mayor aleatoriedad
-    xor dx, cx
-    mov al, dl         ; Devolver el byte menos significativo de DX como número aleatorio
-    ret
 
-; Procedimiento para concatenar cadenas
-Concatenar proc
-    mov di, offset resultado ; Direccion donde se almacenara el resultado
-    mov cx, 0               ; Contador de longitud
+;--------------------------------------
+;Procedimiento para generar y unir aleatorios
+;--------------------------------------
+llamar_todos_aleatorios proc
+	call SaltoDeLinea
+	call generar_8
 
-find_end:
-    cmp byte ptr [di], 0    ; Buscar el final de la cadena de resultado
-    je  copy_string          ; Si es 0, saltar a la copia
-    inc di                   ; Incrementar DI
-    inc cx                   ; Contar longitud
-    jmp find_end             ; Repetir
-
-copy_string:
-    ; Copiar la cadena desde SI a DI
-copy_loop:
-    mov al, [si]            ; Cargar el carácter de SI
-    cmp al, 0               ; Verificar si es el final de la cadena
-    je  done_copy           ; Si es 0, terminar la copia
-    mov [di], al            ; Copiar carácter a resultado
-    inc si                  ; Mover al siguiente carácter en SI
-    inc di                  ; Mover al siguiente en el resultado
-    jmp copy_loop           ; Repetir
-
-done_copy:
-    mov byte ptr [di], 0    ; Terminar la cadena de resultado con 0 (indicando que es un byte)
-    ret
-Concatenar endp
+	call generar_4
 	
-end
+	MOV ah, 09h
+	LEA dx, byteSignificativo1
+	INT 21h
+	call generar_3
+	
+	
+	call generate_random_1_to_4       ; Generar un número aleatorio entre 1 y 4
+    call asignar_caracter              ; Asignar el carácter correspondiente
 
+    ; Imprimir el carácter aleatorio
+    mov ah, 02h                       ; Función para imprimir un carácter
+    mov dl, aleatorio                  ; Cargar el carácter aleatorio en DL
+    int 21h                           ; Llamar a la interrupción DOS para imprimir
+	call generar_3
+	
+	call generar_12
+	
+	
+	
+	jmp Parte1 
+
+llamar_todos_aleatorios endp
+
+;--------------------------------------
+;Generar 1
+;--------------------------------------
+generar_1 proc
+;1
+call generate_random
+call long_delay
+MOV ah, 09h
+LEA dx, guion
+INT 21h
+ret
+generar_1 endp
+;--------------------------------------
+;Generar 3
+;--------------------------------------
+generar_3 proc
+;1
+call generate_random
+call long_delay
+;2
+call generate_random
+call long_delay
+;3
+call generate_random
+call long_delay
+
+MOV ah, 09h
+LEA dx, guion
+INT 21h
+
+ret
+generar_3 endp
+
+;--------------------------------------
+;Generar 4
+;--------------------------------------
+generar_4 proc
+;1
+call generate_random
+call long_delay
+;2
+call generate_random
+call long_delay
+;3
+call generate_random
+call long_delay
+;4
+call generate_random
+call long_delay
+
+MOV ah, 09h
+LEA dx, guion
+INT 21h
+ret
+generar_4 endp
+;--------------------------------------
+;Generar 8
+;--------------------------------------
+generar_8 proc
+;1
+call generate_random
+call long_delay
+;2
+call generate_random
+call long_delay
+;3
+call generate_random
+call long_delay
+;4
+call generate_random
+call long_delay
+;5
+call generate_random
+call long_delay
+;6
+call generate_random
+call long_delay
+;7
+call generate_random
+call long_delay
+;8
+call generate_random
+call long_delay
+MOV ah, 09h
+LEA dx, guion
+INT 21h
+
+ret
+generar_8 endp
+;--------------------------------------
+;Generar 12
+;--------------------------------------
+generar_12 proc
+;1
+call generate_random
+call long_delay
+;2
+call generate_random
+call long_delay
+;3
+call generate_random
+call long_delay
+;4
+call generate_random
+call long_delay
+;5
+call generate_random
+call long_delay
+;6
+call generate_random
+call long_delay
+;7
+call generate_random
+call long_delay
+;8
+call generate_random
+call long_delay
+;9
+call generate_random
+call long_delay
+;10
+call generate_random
+call long_delay
+;11
+call generate_random
+call long_delay
+;12
+call generate_random
+
+ret
+generar_12 endp
+
+; Procedimiento que genera un número aleatorio del 1 al 4
+generate_random_1_to_4 proc
+    MOV AH, 00h                       ; Interrupción para obtener el tiempo del sistema        
+    INT 1AH                           ; CX:DX ahora contienen los ticks del reloj desde medianoche      
+
+    mov ax, dx                        ; Copiar el valor de DX a AX
+    xor dx, dx                        ; Limpiar DX
+    mov cx, 4                         ; Queremos un número del 0 al 3
+    div cx                            ; Aquí DX contendrá el residuo de la división (0-3)
+
+    inc dl                            ; Incrementamos DL para que sea de 1 a 4
+    mov al, dl                        ; Mover el número aleatorio a AL
+    ret                               ; Regresar al procedimiento
+
+generate_random_1_to_4 endp
+
+asignar_caracter proc
+    cmp al, 1                         ; Si el número aleatorio es 1
+    je es_ocho
+    cmp al, 2                         ; Si el número aleatorio es 2
+    je es_nueve
+    cmp al, 3                         ; Si el número aleatorio es 3
+    je es_a
+    cmp al, 4                         ; Si el número aleatorio es 4
+    je es_b
+    jmp fin                           ; Salta al final si no es válido
+
+es_ocho:
+    mov aleatorio, '8'                ; Asignar '8'
+    jmp fin
+
+es_nueve:
+    mov aleatorio, '9'                ; Asignar '9'
+    jmp fin
+
+es_a:
+    mov aleatorio, 'A'                ; Asignar 'A'
+    jmp fin
+
+es_b:
+    mov aleatorio, 'B'                ; Asignar 'B'
+
+fin:
+    ret                               ; Regresar al procedimiento
+asignar_caracter endp
 
 ; ---------------------------------------
 ;PARTE 2
 ; ---------------------------------------
 
 
-
+end
