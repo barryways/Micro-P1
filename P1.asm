@@ -41,9 +41,28 @@
 	
     aleatorio DB ?                     ; Variable para almacenar el carácter aleatorio
 
-	;variables menu parte 2S
+	;variables menu parte 2
+	msgRegexMenu DB 10,13, 'Ingrese el UUID a validar o presione X para salir$', 0
+    msgUUIDValido DB 10,13, 'UUID valido$', 0
+    msgUUIDInvalido DB 10,13, 'UUID invalido$', 0
+	
 
-
+    ; Mensajes de errores específicos, ideal para depuración :)
+    msgErrorGuion8 DB 10,13, 'Error: Falta guion en posicion 8$', 0
+    msgErrorGuion13 DB 10,13, 'Error: Falta guion en posicion 13$', 0
+    msgErrorGuion18 DB 10,13, 'Error: Falta guion en posicion 18$', 0
+    msgErrorGuion23 DB 10,13, 'Error: Falta guion en posicion 23$', 0
+    msgErrorHexBlock1 DB 10,13, 'Error: Bloque 1 no es hexadecimal$', 0
+    msgErrorHexBlock2 DB 10,13, 'Error: Bloque 2 no es hexadecimal$', 0
+    msgErrorHexBlock3 DB 10,13, 'Error: Bloque 3 no comienza con 1$', 0
+    msgErrorHexBlock4 DB 10,13, 'Error: Bloque 4 no comienza con 8, 9, A o B$', 0
+    msgErrorHexBlock5 DB 10,13, 'Error: Bloque 5 no es hexadecimal$', 0
+	msgErrorLongitud DB 10,13, 'Error: Longitud incorrecta$', 0
+	
+    UUIDIngresado DB 37       ; Tamaño de la cadena a ingresar + terminador
+    NumChars      DB 0        ; Número de caracteres ingresados (inicialmente 0)
+    CadenaUUID    DB 36 DUP('$')  ; Aquí se almacena la cadena
+	
 	;variables extras
 	newline db 0Dh, 0Ah, '$'  ; Cadena que contiene retorno de carro y nueva línea
 
@@ -113,16 +132,27 @@ Parte1:
 ; ---------------------------------------
 Parte2:
     ; Mostrar el titulo del menu de la parte 2
-	call SaltoDeLinea
+    call SaltoDeLinea
     MOV ah, 09h
     LEA dx, titulomenuparte2
     INT 21h
 
-    ; Aquí pones tu lógica para la parte 2 (validar UUID con regex)
+    ; Mostramos el mensaje para ingresar el UUID
+    MOV ah, 09h
+    LEA dx, msgRegexMenu
+    INT 21h
 
+    ; Lectura del UUID ingresado por el usuario
+	call SaltoDeLinea ;insertamos un salto de linea para que se vea bonito
+    call LeerUUID
 
-    ; Volver al menu principal después de terminar
-    jmp MenuPrincipal
+    ; Valida el UUID ingresado
+	call SaltoDeLinea ;insertamos un salto de linea para que se vea bonito
+    call ValidarUUID
+
+    ; Regresa al menu principal después de terminar
+    JMP MenuPrincipal
+	
 
 ; ---------------------------------------
 ; Leer la opción del usuario
@@ -416,5 +446,194 @@ asignar_caracter endp
 ;PARTE 2
 ; ---------------------------------------
 
+
+; ---------------------------------------
+; Leer el UUID ingresado por el usuario 
+; ---------------------------------------
+LeerUUID proc
+    LEA dx, UUIDIngresado
+    MOV ah, 0Ah    ; Función para leer una cadena con tamaño máximo (DOS)
+    INT 21h
+    RET
+LeerUUID endp
+
+; ---------------------------------------
+; Procedimiento para validar el UUID
+; ---------------------------------------
+
+ValidarUUID proc
+    ; Carga la dirección de UUIDIngresado
+    LEA bx, UUIDIngresado
+
+    ; Verificamos que la longitud ingresada sea 36 caracteres
+    MOV al, [bx+1]      ; Usamos el segundo byte de UUIDIngresado para almacenar el número de caracteres ingresados
+    CMP al, 36          ; Comparar
+    JNE corto_error_longitud ; Si no es 36, hace salto al manejo de error de longitud
+
+    ; Verifica la posición 8, 13, 18, 23 de los guiones
+    MOV al, [bx+10]      ; Aquí se determina la posición del guión, 2 bytes después para almacenar la cadena después del tamaño
+    CMP al, '-'
+    JNE error_guion_8
+    JMP continuar_1
+
+error_guion_8:
+    MOV ah, 09h
+    LEA dx, msgErrorGuion8
+    INT 21h
+    JMP uuid_invalido
+
+continuar_1:
+    MOV al, [bx+15]      ; Posición 13 en bytes
+    CMP al, '-'
+    JNE error_guion_13
+    JMP continuar_2
+
+error_guion_13:
+    MOV ah, 09h
+    LEA dx, msgErrorGuion13
+    INT 21h
+    JMP uuid_invalido
+
+continuar_2:
+    MOV al, [bx+20]      ; Posición 18 en bytes
+    CMP al, '-'
+    JNE error_guion_18
+    JMP continuar_3
+
+error_guion_18:
+    MOV ah, 09h
+    LEA dx, msgErrorGuion18
+    INT 21h
+    JMP uuid_invalido
+
+continuar_3:
+    MOV al, [bx+25]      ;Posición 23 en bytes
+    CMP al, '-'
+    JNE error_guion_23
+    JMP continuar_4
+
+error_guion_23:
+    MOV ah, 09h
+    LEA dx, msgErrorGuion23
+    INT 21h
+    JMP uuid_invalido
+
+continuar_4:
+    ; Validación de los bloques hexadecimales
+    MOV cx, 8
+    MOV di, 2           ; Comienza en el tercer byte por los primeros dos bytes de control en DOS
+valida_bloque1:
+    MOV al, [bx+di]
+    CALL validar_hexadecimal
+    INC di
+    LOOP valida_bloque1
+
+    INC di    ; Skip al guion
+
+    MOV cx, 4
+valida_bloque2:
+    MOV al, [bx+di]
+    CALL validar_hexadecimal
+    INC di
+    LOOP valida_bloque2
+
+    INC di    ; Skip al guion
+
+    MOV al, [bx+di]
+    CMP al, '1'
+    JNE error_bloque3
+    JMP continuar_5
+
+error_bloque3:
+    MOV ah, 09h
+    LEA dx, msgErrorHexBlock3
+    INT 21h
+    JMP uuid_invalido
+
+; Punto de salto corto por el error de longitud
+corto_error_longitud:
+    JMP largo_error_longitud
+
+continuar_5:
+    INC di
+    MOV cx, 3
+valida_bloque3_rest:
+    MOV al, [bx+di]
+    CALL validar_hexadecimal
+    INC di
+    LOOP valida_bloque3_rest
+
+    INC di    ; Skip al guion
+
+    MOV al, [bx+di]			;Evalúa la entrada del 4to bloque, que sea 8, 9, A o B
+    CMP al, '8'
+    JE valida_bloque4_rest
+    CMP al, '9'
+    JE valida_bloque4_rest
+    CMP al, 'A'
+    JE valida_bloque4_rest
+    CMP al, 'B'
+    JE valida_bloque4_rest
+    JMP error_bloque4
+
+error_bloque4:
+    MOV ah, 09h
+    LEA dx, msgErrorHexBlock4
+    INT 21h
+    JMP uuid_invalido
+
+valida_bloque4_rest:
+    INC di
+    MOV cx, 3
+valida_bloque4:
+    MOV al, [bx+di]
+    CALL validar_hexadecimal
+    INC di
+    LOOP valida_bloque4
+
+    INC di    ; Saltar guion
+
+    MOV cx, 12
+valida_bloque5:
+    MOV al, [bx+di]			;Validación del bloque 5
+    CALL validar_hexadecimal
+    INC di
+    LOOP valida_bloque5
+
+    ; Si todo es correcto, muestra el UUID válido
+    MOV ah, 09h
+    LEA dx, msgUUIDValido
+    INT 21h
+    JMP uuid_fin
+
+
+largo_error_longitud:		;Error de longitud de la cadena
+    MOV ah, 09h
+    LEA dx, msgErrorLongitud
+    INT 21h
+    JMP uuid_invalido
+
+uuid_invalido:
+    MOV ah, 09h
+    LEA dx, msgUUIDInvalido
+    INT 21h
+
+uuid_fin:
+    RET
+ValidarUUID endp
+
+; Validación si un carácter es hexadecimal, (0-9, A-F) en la regex
+validar_hexadecimal proc
+    CMP al, '0'
+    JL uuid_invalido
+    CMP al, '9'
+    JLE valido
+    CMP al, 'A'
+    JL uuid_invalido
+    CMP al, 'F'
+    JG uuid_invalido
+valido:
+    RET
+validar_hexadecimal endp
 
 end
